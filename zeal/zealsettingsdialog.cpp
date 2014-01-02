@@ -41,6 +41,28 @@ ZealSettingsDialog::ZealSettingsDialog(ZealListModel &zList, QWidget *parent) :
     loadSettings();
 
     connect(&naManager, &QNetworkAccessManager::finished, [this](QNetworkReply *reply){DownloadCompleteCb(reply);});
+
+
+    // Check for bsdtar
+#ifdef WIN32
+    QDir tardir(QCoreApplication::applicationDirPath());
+    QString program = tardir.filePath(TAR".exe");
+#else
+    QString program = TAR;
+#endif
+    QProcess *tar = new QProcess();
+    QStringList args;
+    args.append("--version"); // Possibility to verify expected output / version?
+                              // In either case, the program needs an argument that won't
+                              // generate an error code.
+    connect( tar, static_cast<void(QProcess::*)(QProcess::ProcessError)>(&QProcess::error), [this](QProcess::ProcessError error){
+        if(error == QProcess::FailedToStart || error == QProcess::Crashed || error == QProcess::UnknownError ){
+            QIcon warnIcon = QIcon::fromTheme("dialog-warning");
+            ui->docsetStatusIconLabel->setPixmap( warnIcon.pixmap( 24, 24 ) );
+            ui->docsetStatusTextLabel->setText("Error verifying <tt>"TAR"</tt>. Some docsets may not install.");
+        }
+    });
+    tar->start( program, args );
 }
 
 ZealSettingsDialog::~ZealSettingsDialog()
@@ -210,9 +232,9 @@ void ZealSettingsDialog::DownloadCompleteCb(QNetworkReply *reply){
                 } else {
 #ifdef WIN32
                     QDir tardir(QCoreApplication::applicationDirPath());
-                    QString program = tardir.filePath("bsdtar.exe");
+                    QString program = tardir.filePath(TAR".exe");
 #else
-                    QString program = "bsdtar";
+                    QString program = TAR;
 #endif
                     QTemporaryFile *tmp = new QTemporaryFile;
                     tmp->open();
@@ -229,50 +251,61 @@ void ZealSettingsDialog::DownloadCompleteCb(QNetworkReply *reply){
                     }
                     args.append(tmp->fileName());
                     args.append("*docset");
-                    tar->start(program, args);
-                    tar->waitForFinished();
-                    auto line_buf = tar->readLine();
-                    auto outDir = QString::fromLocal8Bit(line_buf).split("/")[0];
 
-                    if(reply->request().url().path().endsWith("tar.bz2")) {
-                        args = QStringList("-jxf");
-                    } else {
-                        args = QStringList("-zxf");
-                    }
-                    args.append(tmp->fileName());
-                    connect(tar, (void (QProcess::*)(int,QProcess::ExitStatus))&QProcess::finished, [=](int a, QProcess::ExitStatus b) {
-                        auto path = reply->request().url().path().split("/");
-                        auto fileName = path[path.count()-1];
-                        auto docsetName = fileName.replace(".tgz", ".docset");
-                        docsetName = docsetName.replace(".tar.bz2", ".docset");
-
-                        if(outDir != docsetName) {
-                            QDir dataDir2(dataDir);
-                            dataDir2.rename(outDir, docsetName);
-                        }
-
-                        // FIXME C&P (see "FIXME C&P" below)
-                        QMetaObject::invokeMethod(docsets, "addDocset", Qt::BlockingQueuedConnection,
-                                                  Q_ARG(QString, dataDir.absoluteFilePath(docsetName)));
-                        zealList.resetModulesCounts();
-                        refreshRequested();
-                        ui->listView->reset();
-                        for(int i = 0; i < ui->docsetsList->count(); ++i) {
-                            if(ui->docsetsList->item(i)->text()+".docset" == docsetName) {
-                                listItem->setData(ZealDocsetDoneInstalling, true);
-                                listItem->setData(ProgressItemDelegate::ProgressFormatRole, "Done");
-                                listItem->setData(ProgressItemDelegate::ProgressRole, 1);
-                                listItem->setData(ProgressItemDelegate::ProgressMaxRole, 1);
-                                break;
-                            }
-                        }
+                    connect( tar, static_cast<void(QProcess::*)(QProcess::ProcessError)>(&QProcess::error), [=](QProcess::ProcessError error){
+                        QIcon errIcon = QIcon::fromTheme("dialog-error");
+                        listItem->setIcon( errIcon );
+                        listItem->setToolTip("Unable to install this docset because <tt>"TAR"</tt> was not found, or encountered an error.");
+                        listItem->setData(ProgressItemDelegate::ProgressVisibleRole, false);
                         endTasks();
                     });
-                    if(listItem){
-                        listItem->setData(ProgressItemDelegate::ProgressRole, 0);
-                        listItem->setData(ProgressItemDelegate::ProgressMaxRole, 0);
-                    }
+
                     tar->start(program, args);
+                    bool programRet = tar->waitForFinished();
+                    if( programRet ){
+                        auto line_buf = tar->readLine();
+                        auto outDir = QString::fromLocal8Bit(line_buf).split("/")[0];
+
+                        if(reply->request().url().path().endsWith("tar.bz2")) {
+                            args = QStringList("-jxf");
+                        } else {
+                            args = QStringList("-zxf");
+                        }
+                        args.append(tmp->fileName());
+                        connect(tar, (void (QProcess::*)(int,QProcess::ExitStatus))&QProcess::finished, [=](int a, QProcess::ExitStatus b) {
+                            auto path = reply->request().url().path().split("/");
+                            auto fileName = path[path.count()-1];
+                            auto docsetName = fileName.replace(".tgz", ".docset");
+                            docsetName = docsetName.replace(".tar.bz2", ".docset");
+
+                            if(outDir != docsetName) {
+                                QDir dataDir2(dataDir);
+                                dataDir2.rename(outDir, docsetName);
+                            }
+
+                            // FIXME C&P (see "FIXME C&P" below)
+                            QMetaObject::invokeMethod(docsets, "addDocset", Qt::BlockingQueuedConnection,
+                                                      Q_ARG(QString, dataDir.absoluteFilePath(docsetName)));
+                            zealList.resetModulesCounts();
+                            refreshRequested();
+                            ui->listView->reset();
+                            for(int i = 0; i < ui->docsetsList->count(); ++i) {
+                                if(ui->docsetsList->item(i)->text()+".docset" == docsetName) {
+                                    listItem->setData(ZealDocsetDoneInstalling, true);
+                                    listItem->setData(ProgressItemDelegate::ProgressFormatRole, "Done");
+                                    listItem->setData(ProgressItemDelegate::ProgressRole, 1);
+                                    listItem->setData(ProgressItemDelegate::ProgressMaxRole, 1);
+                                    break;
+                                }
+                            }
+                            endTasks();
+                        });
+                        if(listItem){
+                            listItem->setData(ProgressItemDelegate::ProgressRole, 0);
+                            listItem->setData(ProgressItemDelegate::ProgressMaxRole, 0);
+                        }
+                        tar->start(program, args);
+                    }
                 }
             } else {
                 QTemporaryFile *tmp = new QTemporaryFile;

@@ -9,6 +9,8 @@
 #include "zeallistmodel.h"
 #include "zealdocsetsregistry.h"
 
+#define TAR "bsdtar"
+
 class ZealSettingsDialog : public QDialog
 {
     Q_OBJECT
