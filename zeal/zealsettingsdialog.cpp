@@ -57,9 +57,10 @@ ZealSettingsDialog::ZealSettingsDialog(ZealListModel &zList, QWidget *parent) :
                               // generate an error code.
     connect( tar, static_cast<void(QProcess::*)(QProcess::ProcessError)>(&QProcess::error), [this](QProcess::ProcessError error){
         if(error == QProcess::FailedToStart || error == QProcess::Crashed || error == QProcess::UnknownError ){
-            QIcon warnIcon = QIcon::fromTheme("dialog-warning");
+            /*QIcon warnIcon = QIcon::fromTheme("dialog-warning");
             ui->docsetStatusIconLabel->setPixmap( warnIcon.pixmap( 24, 24 ) );
-            ui->docsetStatusTextLabel->setText("Error verifying <tt>"TAR"</tt>. Some docsets may not install.");
+            ui->docsetStatusTextLabel->setText("Error verifying <tt>"TAR"</tt>. Some docsets may not install.");*/
+            showStatus( "Error verifying <tt>"TAR"</tt>. Some docsets may not install.", "dialog-warning" );
         }
     });
     tar->start( program, args );
@@ -148,6 +149,25 @@ void ZealSettingsDialog::endTasks(qint8 tasks = 1)
    }
 
 }
+
+void ZealSettingsDialog::showStatus(QString text, QString icon){
+    if( text.isEmpty() ){
+        ui->docsetStatusIconLabel->setText( "" );
+        ui->docsetStatusTextLabel->setText( "" );
+    } else {
+        QIcon ico = QIcon::fromTheme(icon);
+        ui->docsetStatusIconLabel->setPixmap( ico.pixmap( 24, 24 ) );
+        ui->docsetStatusTextLabel->setText(text);
+    }
+}
+
+void ZealSettingsDialog::setDocsetStatus(QListWidgetItem *item, QString text, QString icon){
+    QIcon errIcon = QIcon::fromTheme(icon);
+    item->setIcon( errIcon );
+    item->setToolTip(text);
+    item->setData(ProgressItemDelegate::ProgressVisibleRole, false);
+}
+
 
 void ZealSettingsDialog::DownloadCompleteCb(QNetworkReply *reply){
     qint8 remainingRetries = replies.take(reply);
@@ -252,11 +272,9 @@ void ZealSettingsDialog::DownloadCompleteCb(QNetworkReply *reply){
                     args.append(tmp->fileName());
                     args.append("*docset");
 
+                    // Catch any errors when decompressing
                     connect( tar, static_cast<void(QProcess::*)(QProcess::ProcessError)>(&QProcess::error), [=](QProcess::ProcessError error){
-                        QIcon errIcon = QIcon::fromTheme("dialog-error");
-                        listItem->setIcon( errIcon );
-                        listItem->setToolTip("Unable to install this docset because <tt>"TAR"</tt> was not found, or encountered an error.");
-                        listItem->setData(ProgressItemDelegate::ProgressVisibleRole, false);
+                        setDocsetStatus( listItem, "Unable to install this docset because <tt>"TAR"</tt> was not found, or encountered an error.", "dialog-error");
                         endTasks();
                     });
 
@@ -382,6 +400,7 @@ void ZealSettingsDialog::DownloadCompleteCb(QNetworkReply *reply){
                     tmp->close();
                     delete tmp;
                     QMessageBox::warning(this, "Error", "Download failed: invalid ZIP file.");
+                    setDocsetStatus( listItem, "Download failed: invalid ZIP file.", "dialog-error");
                     endTasks();
                 }
             }

@@ -9,7 +9,7 @@
 #include "zeallistmodel.h"
 #include "zealdocsetsregistry.h"
 
-#define TAR "bsdtar"
+#define TAR "bsdtart"
 
 class ZealSettingsDialog : public QDialog
 {
@@ -34,6 +34,9 @@ private:
     void DownloadCompleteCb(QNetworkReply *reply);
     void resetProgress();
     void stopDownloads();
+
+    void showStatus(QString text, QString icon="dialog-information");
+    void setDocsetStatus(QListWidgetItem *item, QString text, QString icon="");
 
     enum DocsetProgressRoles {
         ZealDocsetDoneInstalling = Qt::UserRole + 20,
