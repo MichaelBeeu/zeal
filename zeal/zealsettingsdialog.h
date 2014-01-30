@@ -9,7 +9,7 @@
 #include "zeallistmodel.h"
 #include "zealdocsetsregistry.h"
 
-#define TAR "bsdtart"
+#define TAR "bsdtar"
 
 class ZealSettingsDialog : public QDialog
 {

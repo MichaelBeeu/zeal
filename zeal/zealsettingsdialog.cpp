@@ -57,9 +57,6 @@ ZealSettingsDialog::ZealSettingsDialog(ZealListModel &zList, QWidget *parent) :
                               // generate an error code.
     connect( tar, static_cast<void(QProcess::*)(QProcess::ProcessError)>(&QProcess::error), [this](QProcess::ProcessError error){
         if(error == QProcess::FailedToStart || error == QProcess::Crashed || error == QProcess::UnknownError ){
-            /*QIcon warnIcon = QIcon::fromTheme("dialog-warning");
-            ui->docsetStatusIconLabel->setPixmap( warnIcon.pixmap( 24, 24 ) );
-            ui->docsetStatusTextLabel->setText("Error verifying <tt>"TAR"</tt>. Some docsets may not install.");*/
             showStatus( "Error verifying <tt>"TAR"</tt>. Some docsets may not install.", "dialog-warning" );
         }
     });
